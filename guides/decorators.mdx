@@ -1,0 +1,261 @@
+---
+title: 'Step Decorators'
+description: 'Inject Metaflow decorators at deploy time with --with'
+icon: 'at'
+---
+
+## Overview
+
+The `--with` flag lets you inject Metaflow step decorators at deploy time without modifying your flow source code. This is useful for adding infrastructure-level concerns (sandboxing, resource hints, compute backends) when compiling flows to Dagster.
+
+## Basic Usage
+
+Inject a decorator on all steps:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py --with=sandbox
+```
+
+This adds `@sandbox` to every step in your flow at compile time.
+
+## Multiple Decorators
+
+Chain multiple `--with` flags to apply multiple decorators:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py \
+  --with=sandbox \
+  --with='resources:cpu=4,memory=8000'
+```
+
+The decorators are applied in the order specified.
+
+## Resource Hints
+
+The `@resources` decorator forwards CPU, memory, and GPU hints to the underlying compute backend (e.g., `@kubernetes`, `@batch`, `@sandbox`).
+
+### Defining Resources in Flow Code
+
+```python
+from metaflow import FlowSpec, step, resources
+
+class TrainingFlow(FlowSpec):
+    @resources(cpu=4, memory=8000, gpu=1)
+    @step
+    def train(self):
+        # This step gets 4 CPUs, 8GB RAM, 1 GPU
+        print("Training model...")
+        self.next(self.end)
+    
+    @step
+    def end(self):
+        pass
+```
+
+### Injecting Resources at Deploy Time
+
+Alternatively, inject resource hints without modifying the flow:
+
+```bash
+python train_flow.py dagster create train_dagster.py \
+  --with='resources:cpu=8,memory=16000,gpu=2'
+```
+
+This applies the resource hints to **all steps** in the flow.
+
+### How Resource Hints Work
+
+<Steps>
+  <Step title="Decorator Added">
+    The `--with=resources:...` flag generates a `resources:cpu=N,memory=M,gpu=G` decorator spec.
+  </Step>
+  
+  <Step title="Forwarded to Compute Backend">
+    The resource hints are passed to the underlying compute backend via the `--with` flag when `metaflow step` is invoked.
+  </Step>
+  
+  <Step title="Backend Applies Resources">
+    The compute backend (e.g., `@kubernetes`, `@batch`) reads the resource hints and provisions the appropriate resources for the step execution.
+  </Step>
+</Steps>
+
+<Info>
+Resource hints are also visible as Dagster op tags in the UI, making it easy to see resource allocations at a glance.
+</Info>
+
+## Common Decorator Patterns
+
+### Sandbox Execution
+
+Run all steps in isolated sandboxes (requires `metaflow-sandbox` extension):
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py --with=sandbox
+```
+
+### Kubernetes Backend
+
+Deploy all steps to Kubernetes:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py \
+  --with=kubernetes \
+  --with='resources:cpu=2,memory=4000'
+```
+
+### AWS Batch Backend
+
+Run compute-intensive steps on AWS Batch:
+
+```bash
+python train_flow.py dagster create train_dagster.py \
+  --with=batch \
+  --with='resources:cpu=16,memory=32000,gpu=4'
+```
+
+### Combining with Step-Level Decorators
+
+Decorators added via `--with` combine with decorators already present in your flow code:
+
+```python
+class MyFlow(FlowSpec):
+    @retry(times=3)
+    @step
+    def process(self):
+        # This step has both @retry (from code) and @sandbox (from --with)
+        pass
+```
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py --with=sandbox
+```
+
+Result: The `process` step gets both `@retry` and `@sandbox` decorators.
+
+## How --with Works Internally
+
+<CodeGroup>
+
+```python Flow Code
+class SimpleFlow(FlowSpec):
+    @step
+    def start(self):
+        self.value = 42
+        self.next(self.end)
+    
+    @step
+    def end(self):
+        pass
+```
+
+```python Generated Code (Simplified)
+STEP_WITH_DECORATORS = {
+    'start': ['sandbox', 'resources:cpu=4,memory=8000'],
+    'end': ['sandbox', 'resources:cpu=4,memory=8000'],
+}
+
+def _run_step(context, step_name, ...):
+    cmd = [
+        sys.executable, FLOW_FILE,
+        *METAFLOW_TOP_ARGS,
+        *[f"--with={d}" for d in STEP_WITH_DECORATORS[step_name]],
+        "step", step_name,
+        "--run-id", run_id,
+        "--task-id", task_id,
+        # ...
+    ]
+    subprocess.run(cmd)
+```
+
+</CodeGroup>
+
+The generated Dagster file embeds the `--with` decorators in `STEP_WITH_DECORATORS` and passes them to every `metaflow step` invocation.
+
+## Resource Spec Syntax
+
+The `resources:` decorator accepts three optional parameters:
+
+- `cpu` (int): Number of CPU cores
+- `memory` (int): Memory in MB
+- `gpu` (int): Number of GPUs
+
+Syntax:
+
+```bash
+--with='resources:cpu=N,memory=M,gpu=G'
+```
+
+Examples:
+
+```bash
+# CPU only
+--with='resources:cpu=8'
+
+# CPU + memory
+--with='resources:cpu=4,memory=16000'
+
+# All three
+--with='resources:cpu=16,memory=32000,gpu=2'
+```
+
+<Note>
+The order of parameters doesn't matter: `cpu=4,memory=8000` is equivalent to `memory=8000,cpu=4`.
+</Note>
+
+## Best Practices
+
+<Tip>
+**Use `--with` for infrastructure concerns**: Keep business logic in your flow code and use `--with` for deployment-specific configuration like sandboxing, compute backends, and resource hints.
+</Tip>
+
+<Warning>
+Changing `--with` decorators requires re-running `dagster create` to regenerate the definitions file. The decorators are baked into the generated code at compile time.
+</Warning>
+
+### Per-Step vs. Global Decorators
+
+- **Per-step decorators** (in flow code): Use when different steps need different configurations
+- **Global decorators** (`--with`): Use when all steps should share the same infrastructure setup
+
+## Advanced Example
+
+A complete example with multiple decorators:
+
+```python
+from metaflow import FlowSpec, step, resources, retry
+
+class ProductionFlow(FlowSpec):
+    @step
+    def start(self):
+        self.data = [1, 2, 3, 4, 5]
+        self.next(self.process, foreach='data')
+    
+    @resources(cpu=8, memory=16000)
+    @retry(times=3)
+    @step
+    def process(self):
+        # Heavy computation with retries
+        self.result = self.input ** 2
+        self.next(self.join)
+    
+    @step
+    def join(self, inputs):
+        self.results = [inp.result for inp in inputs]
+        self.next(self.end)
+    
+    @step
+    def end(self):
+        print(f"Results: {self.results}")
+```
+
+Deploy with sandboxing:
+
+```bash
+python production_flow.py dagster create production_dagster.py \
+  --with=sandbox \
+  --with=kubernetes
+```
+
+This gives you:
+- `@resources` and `@retry` on the `process` step (from code)
+- `@sandbox` and `@kubernetes` on all steps (from `--with`)

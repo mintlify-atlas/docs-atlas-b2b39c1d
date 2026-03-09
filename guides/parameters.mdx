@@ -1,0 +1,196 @@
+---
+title: 'Parameters'
+description: 'Pass configuration to your flows with Metaflow Parameters'
+icon: 'sliders'
+---
+
+## Overview
+
+Metaflow `Parameter` definitions are automatically forwarded to Dagster as a typed `Config` class on the start op. This allows you to configure your flow runs through the Dagster UI launchpad or via config files when using the CLI.
+
+## How It Works
+
+When you define parameters in your Metaflow flow using the `Parameter` class, `metaflow-dagster` generates a Pydantic `Config` class with matching types and default values. The parameters become configuration inputs on the start operation in Dagster.
+
+### Type Forwarding
+
+Parameter types are automatically converted:
+
+- `str` → `str`
+- `int` → `int`
+- `float` → `float`
+- `bool` → `bool`
+
+## Basic Example
+
+Here's a flow with two parameters:
+
+```python tests/flows/parametrized_flow.py
+from metaflow import FlowSpec, Parameter, step
+
+
+class ParametrizedFlow(FlowSpec):
+    """A flow that uses Metaflow Parameters."""
+
+    greeting = Parameter("greeting", default="Hello", help="Greeting prefix")
+    count = Parameter("count", default=3, type=int, help="Number of repetitions")
+
+    @step
+    def start(self):
+        self.messages = [f"{self.greeting} #{i}" for i in range(self.count)]
+        self.next(self.end)
+
+    @step
+    def end(self):
+        assert len(self.messages) == self.count
+        print("ParametrizedFlow completed:", self.messages)
+```
+
+## Generating the Dagster Definitions
+
+Compile your flow to a Dagster definitions file:
+
+```bash
+python parametrized_flow.py dagster create param_flow_dagster.py
+```
+
+The generated file includes a config class like this:
+
+```python
+class ParametrizedFlowConfig(Config):
+    greeting: str = 'Hello'  # Greeting prefix
+    count: int = 3  # Number of repetitions
+```
+
+## Passing Parameters
+
+<Tabs>
+  <Tab title="Dagster UI Launchpad">
+    <Steps>
+      <Step title="Open the Launchpad">
+        Navigate to your job in the Dagster UI and click "Launch run" or "Open launchpad"
+      </Step>
+      
+      <Step title="Configure Parameters">
+        The launchpad displays a typed form with your parameter defaults pre-filled:
+        
+        ```yaml
+        ops:
+          op_start:
+            config:
+              greeting: "Hi"
+              count: 5
+        ```
+        
+        Modify the values as needed for your run.
+      </Step>
+      
+      <Step title="Launch">
+        Click "Launch run" to start execution with your custom parameters.
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Config File (CLI)">
+    <Steps>
+      <Step title="Create a config file">
+        Create a YAML file (e.g., `config.yaml`) with your parameter overrides:
+        
+        ```yaml config.yaml
+        ops:
+          op_start:
+            config:
+              greeting: Hi
+              count: 5
+        ```
+      </Step>
+      
+      <Step title="Execute with config">
+        Pass the config file when executing via the Dagster CLI:
+        
+        ```bash
+        python -m dagster job execute \
+          -f param_flow_dagster.py \
+          -j ParametrizedFlow \
+          -c config.yaml
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Python API">
+    Pass parameters programmatically using the `run_config` parameter:
+    
+    ```python
+    from dagster_defs import ParametrizedFlow
+    
+    result = ParametrizedFlow.execute_in_process(
+        run_config={
+            "ops": {
+                "op_start": {
+                    "config": {
+                        "greeting": "Hi",
+                        "count": 5
+                    }
+                }
+            }
+        }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Usage
+
+### Multiple Parameters
+
+You can define as many parameters as needed:
+
+```python
+class AdvancedFlow(FlowSpec):
+    model_name = Parameter("model_name", default="gpt-4", help="Model to use")
+    temperature = Parameter("temperature", default=0.7, type=float, help="Sampling temperature")
+    max_tokens = Parameter("max_tokens", default=100, type=int, help="Max output tokens")
+    verbose = Parameter("verbose", default=False, type=bool, help="Enable verbose logging")
+    
+    @step
+    def start(self):
+        # Access parameters via self.parameter_name
+        print(f"Using model: {self.model_name}")
+        print(f"Temperature: {self.temperature}")
+        self.next(self.end)
+```
+
+### Parameter Help Text
+
+The `help` parameter is preserved in the generated config class as comments, making it visible in the Dagster UI and generated code:
+
+```python
+class MyFlowConfig(Config):
+    threshold: float = 0.5  # Confidence threshold for predictions
+    batch_size: int = 32  # Number of samples per batch
+```
+
+## How Parameters Are Passed to Metaflow
+
+Under the hood, `metaflow-dagster`:
+
+1. Creates a `_parameters` task via `metaflow <flow> init`
+2. Passes parameter values using `METAFLOW_INIT_<NAME>` environment variables
+3. Each step subprocess reads parameters from the `_parameters` task
+
+This ensures parameter values are consistent across all steps in your flow, matching Metaflow's native parameter handling.
+
+<Note>
+Parameter values must be JSON-serializable. Complex objects should be passed as JSON strings and deserialized in your flow code.
+</Note>
+
+## Tips
+
+<Tip>
+Parameter defaults are evaluated at **deploy time** using Metaflow's `deploy_time_eval()`. This means you can use expressions that evaluate when the definitions file is created, not when the flow runs.
+</Tip>
+
+<Warning>
+Changing parameter types after generating the Dagster definitions file requires re-running `dagster create` to update the config schema.
+</Warning>

@@ -1,0 +1,169 @@
+---
+title: "dagster create"
+description: "Compile a Metaflow flow into a Dagster definitions file"
+---
+
+## Overview
+
+The `dagster create` command compiles your Metaflow flow into a self-contained Dagster definitions file. Each Metaflow step becomes a Dagster `@op`, and the flow's DAG structure is preserved as a Dagster `@job`.
+
+## Command Syntax
+
+```bash
+python my_flow.py dagster create [OPTIONS] [DEFINITIONS_FILE]
+```
+
+## Arguments
+
+<ParamField path="DEFINITIONS_FILE" type="string" optional>
+  Path to write the generated Dagster definitions file. If not specified, defaults to `<job_name>_dagster.py` (lowercased).
+</ParamField>
+
+## Options
+
+<ParamField path="--name" type="string" optional>
+  Dagster job name. Defaults to the flow name. If the flow uses `@project(name=...)`, the job name is automatically prefixed with the project name (e.g., `myproject_FlowName`).
+</ParamField>
+
+<ParamField path="--with" type="string" optional>
+  Inject a Metaflow step decorator at deploy time. Can be specified multiple times. Examples: `--with=sandbox` or `--with='resources:cpu=4,memory=8000'`.
+</ParamField>
+
+<ParamField path="--workflow-timeout" type="int" optional>
+  Maximum wall-clock seconds for the entire job run. The job will be terminated if it exceeds this duration.
+</ParamField>
+
+<ParamField path="--tag" type="string" optional>
+  Tag all objects produced by Dagster job runs with this tag. Can be specified multiple times. Tags are forwarded to every `metaflow step` subprocess.
+</ParamField>
+
+<ParamField path="--namespace" type="string" optional>
+  Metaflow namespace for the production run. Sets the namespace for all steps executed by the Dagster job.
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+Generate a Dagster definitions file with default settings:
+
+<CodeGroup>
+```bash Default Output File
+python my_flow.py dagster create
+# Creates: myflow_dagster.py
+```
+
+```bash Custom Output File
+python my_flow.py dagster create dagster_defs.py
+# Creates: dagster_defs.py
+```
+</CodeGroup>
+
+### Custom Job Name
+
+Specify a custom name for the Dagster job:
+
+```bash
+python my_flow.py dagster create --name nightly_pipeline
+# Creates: nightly_pipeline_dagster.py
+# Job name in Dagster: nightly_pipeline
+```
+
+### Inject Step Decorators
+
+Add step decorators at deploy time without modifying the flow source:
+
+<CodeGroup>
+```bash Single Decorator
+python my_flow.py dagster create --with=sandbox
+```
+
+```bash Multiple Decorators
+python my_flow.py dagster create \
+  --with=sandbox \
+  --with='resources:cpu=4,memory=8000'
+```
+</CodeGroup>
+
+### Set Workflow Timeout
+
+Cap the total execution time for the entire job:
+
+```bash
+python my_flow.py dagster create --workflow-timeout 3600
+# Job will timeout after 1 hour
+```
+
+### Add Tags
+
+Tag all runs for tracking and organization:
+
+<CodeGroup>
+```bash Single Tag
+python my_flow.py dagster create --tag env:prod
+```
+
+```bash Multiple Tags
+python my_flow.py dagster create \
+  --tag env:prod \
+  --tag version:2 \
+  --tag team:ml
+```
+</CodeGroup>
+
+### Complete Example
+
+Combine multiple options for production deployment:
+
+```bash
+python train_flow.py dagster create train_flow_prod.py \
+  --name production_training \
+  --with=sandbox \
+  --with='resources:cpu=8,memory=16000' \
+  --workflow-timeout 7200 \
+  --tag env:prod \
+  --tag version:3.1 \
+  --namespace production
+```
+
+## Output
+
+On success, the command writes the generated Dagster definitions file and displays:
+
+```
+Compiling MyFlow to Dagster job MyFlow...
+Dagster job MyFlow for flow MyFlow written to myflow_dagster.py.
+Load it in Dagster with:
+    dagster dev -f myflow_dagster.py
+```
+
+## Generated File Contents
+
+The generated definitions file includes:
+
+- One `@op` for each Metaflow step
+- A `@job` that preserves the flow's DAG structure
+- Proper handling of splits, joins, and foreach branches
+- `RetryPolicy` for steps with `@retry` decorator
+- Execution timeouts for steps with `@timeout` decorator
+- `ScheduleDefinition` if the flow has `@schedule` decorator
+- `SensorDefinition` for `@trigger` and `@trigger_on_finish` decorators
+- Typed `Config` class for Metaflow `Parameter` definitions
+- Environment variables from `@environment` decorators
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Launch a Run" icon="rocket" href="/api/cli/trigger">
+    Trigger a Dagster job execution from the CLI
+  </Card>
+  <Card title="Resume Failed Runs" icon="rotate-right" href="/api/cli/resume">
+    Resume a failed run and skip completed steps
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Metaflow Step Decorators](https://docs.metaflow.org/metaflow/decorators)
+- [Dagster Ops & Jobs](https://docs.dagster.io/concepts/ops-jobs-graphs/ops)
+- [@project Decorator](https://docs.metaflow.org/production/coordinating-larger-metaflow-projects)

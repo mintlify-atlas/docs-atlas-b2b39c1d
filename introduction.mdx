@@ -1,0 +1,120 @@
+---
+title: Introduction
+description: Deploy and run Metaflow flows as Dagster jobs
+---
+
+## What is metaflow-dagster?
+
+`metaflow-dagster` generates a self-contained Dagster definitions file from any Metaflow flow, letting you schedule, monitor, and launch your pipelines through Dagster while keeping all your existing Metaflow code unchanged.
+
+## Why metaflow-dagster?
+
+Metaflow and Dagster are both powerful data workflow tools, but they serve different purposes. Metaflow excels at writing data science workflows with excellent local development and artifact management, while Dagster provides a robust orchestration UI, scheduling, and observability features.
+
+`metaflow-dagster` bridges these two worlds:
+
+<CardGroup cols={2}>
+  <Card title="Keep Your Metaflow Code" icon="code">
+    No changes needed to your existing Metaflow flows. Write and test locally as you always have.
+  </Card>
+  <Card title="Dagster UI & Scheduling" icon="calendar">
+    Get Dagster's powerful web UI, run history, scheduling, and monitoring capabilities.
+  </Card>
+  <Card title="All Graph Shapes Supported" icon="diagram-project">
+    Linear, branching, conditional, and foreach flows all work seamlessly.
+  </Card>
+  <Card title="Full Feature Support" icon="sparkles">
+    Parameters, retries, timeouts, environment variables, and step decorators just work.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+`metaflow-dagster` compiles your Metaflow flow's DAG into a self-contained Dagster definitions file. Each Metaflow step becomes a Dagster `@op`. The generated file:
+
+- Runs each step as a subprocess via the standard `metaflow step` CLI
+- Passes `--input-paths` correctly for joins and foreach splits
+- Emits Metaflow artifact keys and a retrieval snippet to the Dagster UI after each step
+- Forwards `@resources` hints to the compute backend via `--with=resources:...`
+- Emits `SensorDefinition`s for `@trigger` and `@trigger_on_finish` decorators
+
+<Note>
+The compiled DAG is fully visible in Dagster — typed inputs, fan-out branches, and fan-in joins are all represented correctly in the UI.
+</Note>
+
+## Quick Example
+
+Here's a simple Metaflow flow:
+
+```python
+from metaflow import FlowSpec, step
+
+class LinearFlow(FlowSpec):
+    @step
+    def start(self):
+        self.message = "hello from start"
+        self.next(self.process)
+
+    @step
+    def process(self):
+        self.result = self.message + " -> process"
+        self.next(self.end)
+
+    @step
+    def end(self):
+        print("Flow completed:", self.result)
+
+if __name__ == "__main__":
+    LinearFlow()
+```
+
+Deploy it to Dagster with two commands:
+
+```bash
+python linear_flow.py dagster create dagster_defs.py
+dagster dev -f dagster_defs.py
+```
+
+That's it! Your flow is now running in Dagster with full UI support.
+
+## Key Features
+
+### All Graph Shapes Supported
+
+- **Linear**: Simple start → process → end flows
+- **Split/Join**: Static branches that run in parallel
+- **Conditional**: Dynamic branches where only one path runs at runtime
+- **Foreach**: Fan-out patterns for parallel processing
+
+### Parameters & Configuration
+
+Metaflow `Parameter` definitions are automatically converted to typed Dagster `Config` classes, giving you a type-safe configuration UI in the Dagster launchpad.
+
+### Retries & Timeouts
+
+`@retry` and `@timeout` decorators on any step are picked up automatically. The generated op gets a Dagster `RetryPolicy` and an `op_execution_timeout` tag — no extra configuration needed.
+
+### Step Decorators
+
+Inject Metaflow step decorators at deploy time without modifying the flow source using the `--with` flag:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py \
+  --with=sandbox \
+  --with='resources:cpu=4,memory=8000'
+```
+
+### Event-Driven Sensors
+
+Decorate your flow with `@trigger` or `@trigger_on_finish` to emit a `SensorDefinition` in the generated file automatically.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install metaflow-dagster and verify your setup
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Create and deploy your first flow in minutes
+  </Card>
+</CardGroup>

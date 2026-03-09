@@ -1,0 +1,212 @@
+---
+title: "dagster resume"
+description: "Resume a failed Dagster job run, reusing outputs from completed steps"
+---
+
+## Overview
+
+The `dagster resume` command re-executes a failed Dagster job while skipping steps that already completed successfully. It uses Metaflow's `--clone-run-id` mechanism to reuse existing task outputs, making it efficient to recover from transient failures without re-running expensive computations.
+
+## Command Syntax
+
+```bash
+python my_flow.py dagster resume [OPTIONS]
+```
+
+## Options
+
+<ParamField path="--run-id" type="string" required>
+  Metaflow run ID of the failed run to resume (e.g., `dagster-abc123`). This is the run ID from the original failed execution.
+</ParamField>
+
+<ParamField path="--definitions-file" type="string" optional>
+  Path to the generated Dagster definitions file. Defaults to `<flowname>_dagster.py` (lowercased).
+</ParamField>
+
+<ParamField path="--job-name" type="string" optional>
+  Dagster job name. Defaults to the flow name. Must match the job name used during the original run.
+</ParamField>
+
+<ParamField path="--tag" type="string" optional>
+  Tag for the new Metaflow run. Can be specified multiple times. These tags are added to the resumed run.
+</ParamField>
+
+<ParamField path="--with" type="string" optional>
+  Inject a Metaflow step decorator at deploy time. Can be specified multiple times. These decorators apply to the resumed run.
+</ParamField>
+
+<ParamField path="--workflow-timeout" type="int" optional>
+  Maximum wall-clock seconds for the entire resumed job run.
+</ParamField>
+
+<ParamField path="--namespace" type="string" optional>
+  Metaflow namespace for the resumed run.
+</ParamField>
+
+## How It Works
+
+When you resume a failed run:
+
+1. **Temporary Definitions File**: A new Dagster definitions file is compiled with `ORIGIN_RUN_ID` set to the failed run ID
+2. **Step Execution**: When each step executes, it passes `--clone-run-id` to the Metaflow CLI
+3. **Output Reuse**: Metaflow checks if the task output already exists in the original run
+4. **Conditional Execution**: If the output exists and is valid, the step is skipped; otherwise, it re-executes
+5. **New Run ID**: The resumed run gets a new Metaflow run ID (derived from the new Dagster run UUID)
+
+## Examples
+
+### Basic Resume
+
+Resume a failed run by its Metaflow run ID:
+
+```bash
+python my_flow.py dagster resume --run-id dagster-d75a08c398a3
+```
+
+### Resume with Custom Definitions File
+
+Specify a different definitions file:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-d75a08c398a3 \
+  --definitions-file production_dagster.py
+```
+
+### Resume with Additional Tags
+
+Add tags to track the resumed run:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-d75a08c398a3 \
+  --tag retry:1 \
+  --tag reason:transient_failure
+```
+
+### Resume with Decorator Injection
+
+Inject step decorators for the resumed run:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-d75a08c398a3 \
+  --with=sandbox \
+  --with='resources:cpu=8,memory=16000'
+```
+
+### Complete Example
+
+Resume with all options:
+
+```bash
+python train_flow.py dagster resume \
+  --run-id dagster-abc123def456 \
+  --definitions-file train_flow_prod.py \
+  --job-name production_training \
+  --tag retry:2 \
+  --tag incident:INC-12345 \
+  --with=sandbox \
+  --workflow-timeout 7200 \
+  --namespace production
+```
+
+## Output
+
+On success, the command displays:
+
+```
+Resuming MyFlow from run dagster-d75a08c398a3 as job MyFlow...
+Resumed Dagster job MyFlow (origin run: dagster-d75a08c398a3, new run: dagster-e86b19d4a9b4).
+```
+
+## Finding the Run ID
+
+To find the Metaflow run ID of a failed run:
+
+<CodeGroup>
+```python Using Metaflow Client
+from metaflow import Flow
+
+flow = Flow('MyFlow')
+for run in flow.runs():
+    if run.id.startswith('dagster-'):
+        print(f"Run ID: {run.id}, Status: {run.successful}")
+```
+
+```bash From Dagster Logs
+# Check the Dagster logs for the op output
+# Each op logs the Metaflow command it ran:
+# metaflow step --run-id dagster-abc123 ...
+```
+</CodeGroup>
+
+## Behavior with --clone-run-id
+
+The `--clone-run-id` flag tells Metaflow to:
+
+1. Check if the task output exists in the original run
+2. If it exists and all inputs match, skip execution and reuse the output
+3. If it doesn't exist or inputs changed, execute the step normally
+
+This means:
+
+- **Completed steps**: Skipped automatically, outputs reused from the original run
+- **Failed steps**: Re-executed with the same parameters
+- **Downstream steps**: Only execute if their inputs are available
+
+## Common Use Cases
+
+### Transient Failures
+
+Retry after network or service interruptions:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-failed123 \
+  --tag retry:transient
+```
+
+### Debugging Failures
+
+Resume with additional logging or debugging decorators:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-failed123 \
+  --with=debug_logging
+```
+
+### Increased Resources
+
+Resume with more compute resources for steps that ran out of memory:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-failed123 \
+  --with='resources:memory=32000'
+```
+
+## Limitations
+
+- The original run must exist in the Metaflow datastore
+- Step outputs must be intact and accessible
+- Cannot resume if the flow definition changed significantly (new steps, different DAG structure)
+- Parameters from the original run are used; you cannot override them during resume
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Definitions" icon="file-code" href="/api/cli/create">
+    Compile a flow to a Dagster definitions file
+  </Card>
+  <Card title="Trigger Runs" icon="rocket" href="/api/cli/trigger">
+    Launch a new Dagster job execution
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Metaflow Resume](https://docs.metaflow.org/metaflow/debugging#resume-and-fixing-failures)
+- [Dagster Retries](https://docs.dagster.io/concepts/ops-jobs-graphs/op-retries)
+- [Metaflow Datastore](https://docs.metaflow.org/metaflow/datastore)

@@ -1,0 +1,150 @@
+---
+title: DagsterTriggeredRun
+description: A Dagster job run triggered via the Deployer API
+---
+
+The `DagsterTriggeredRun` class represents a Metaflow run that was triggered through a Dagster deployment. It provides access to run status, the Metaflow Run object, and links to the Dagster UI.
+
+## Properties
+
+<ResponseField name="pathspec" type="str">
+  The Metaflow pathspec for this run in the format `FlowName/dagster-<run_id>`.
+  
+  The run ID portion corresponds to the Dagster run UUID, which can be used to locate the run in the Dagster UI.
+</ResponseField>
+
+<ResponseField name="status" type="str | None">
+  A simple status string based on the underlying Metaflow run.
+  
+  Returns:
+  - `"PENDING"` - The run has not yet appeared in Metaflow's metadata
+  - `"RUNNING"` - The run is currently executing
+  - `"SUCCEEDED"` - The run completed successfully
+  - `"FAILED"` - The run finished but was not successful
+</ResponseField>
+
+<ResponseField name="run" type="metaflow.Run | None">
+  The Metaflow Run object for this triggered run.
+  
+  This property polls Metaflow until the run with the given pathspec appears. It applies deployer environment variables so local metadata works correctly. Returns `None` if the run has not yet appeared in the metadata.
+  
+  Once the Run object is available, you can access all standard Metaflow Run properties and methods such as:
+  - `run.data` - Access artifacts from the run
+  - `run.successful` - Check if the run completed successfully
+  - `run.finished` - Check if the run has finished
+  - `run.steps` - Iterate through run steps
+</ResponseField>
+
+<ResponseField name="dagster_ui" type="str | None">
+  URL to the Dagster UI for this run, if available.
+  
+  Returns a link to the local Dagster UI (`http://localhost:3000`) by default. The run ID embedded in the Metaflow pathspec is extracted and used to construct the URL.
+  
+  Returns `None` if the pathspec format is unexpected.
+</ResponseField>
+
+## Usage Examples
+
+### Basic Usage
+
+Trigger a run and monitor its status:
+
+```python
+from metaflow import Runner
+
+# Deploy and trigger a run
+with Runner("my_flow.py").deployer("dagster") as deployer:
+    deployed_flow = deployer.create()
+    triggered_run = deployed_flow.run(alpha=0.5, max_iterations=100)
+
+# Check the status
+print(f"Pathspec: {triggered_run.pathspec}")
+print(f"Status: {triggered_run.status}")
+print(f"Dagster UI: {triggered_run.dagster_ui}")
+```
+
+### Accessing Run Data
+
+Wait for the run to complete and access its data:
+
+```python
+import time
+from metaflow import Runner
+
+with Runner("my_flow.py").deployer("dagster") as deployer:
+    deployed_flow = deployer.create()
+    triggered_run = deployed_flow.run(input_data="example")
+
+# Poll until the run completes
+while triggered_run.status in ["PENDING", "RUNNING"]:
+    print(f"Current status: {triggered_run.status}")
+    time.sleep(5)
+
+# Access the run object
+if triggered_run.status == "SUCCEEDED":
+    run = triggered_run.run
+    if run:
+        # Access artifacts from the final step
+        for step in run.steps():
+            print(f"Step: {step.id}")
+            if step.finished_at:
+                for task in step:
+                    print(f"  Task: {task.pathspec}")
+                    # Access task data
+                    print(f"  Data: {task.data}")
+else:
+    print(f"Run failed with status: {triggered_run.status}")
+```
+
+### Monitoring Multiple Runs
+
+Trigger multiple runs and monitor them:
+
+```python
+from metaflow import Runner
+import time
+
+with Runner("my_flow.py").deployer("dagster") as deployer:
+    deployed_flow = deployer.create()
+    
+    # Trigger multiple runs with different parameters
+    runs = [
+        deployed_flow.run(experiment_id=1, learning_rate=0.01),
+        deployed_flow.run(experiment_id=2, learning_rate=0.001),
+        deployed_flow.run(experiment_id=3, learning_rate=0.0001),
+    ]
+
+# Monitor all runs
+while any(r.status in ["PENDING", "RUNNING"] for r in runs):
+    for i, triggered_run in enumerate(runs):
+        print(f"Run {i+1}: {triggered_run.status} - {triggered_run.dagster_ui}")
+    time.sleep(10)
+
+# Check final results
+for i, triggered_run in enumerate(runs):
+    print(f"Run {i+1} final status: {triggered_run.status}")
+    if triggered_run.status == "SUCCEEDED" and triggered_run.run:
+        # Access results
+        print(f"  Pathspec: {triggered_run.run.pathspec}")
+```
+
+### Opening Dagster UI
+
+Get the Dagster UI link for a triggered run:
+
+```python
+from metaflow import Runner
+
+with Runner("my_flow.py").deployer("dagster") as deployer:
+    deployed_flow = deployer.create()
+    triggered_run = deployed_flow.run()
+
+# Print the Dagster UI URL
+if triggered_run.dagster_ui:
+    print(f"View run in Dagster: {triggered_run.dagster_ui}")
+    # You can open this URL in a browser to see the run details
+```
+
+## Inheritance
+
+`DagsterTriggeredRun` inherits from `metaflow.runner.deployer.TriggeredRun`, which provides the base `run` property that polls Metaflow until the run with the given pathspec appears. The Dagster implementation adds the `status` and `dagster_ui` properties for convenience.

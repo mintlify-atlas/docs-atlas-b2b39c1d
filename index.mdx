@@ -1,97 +1,97 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Metaflow Dagster"
+description: "Dagster scheduling, observability, and UI for your Metaflow pipelines"
 ---
 
-## Setting up
+<div className="flex flex-col items-center text-center py-12">
+  <h1 className="text-5xl font-bold mb-4" style={{ color: "#1a1a1a" }}>
+    Metaflow Dagster
+  </h1>
+  <p className="text-xl mb-8" style={{ color: "#545454" }}>
+    Deploy and run Metaflow flows as Dagster jobs with full observability
+  </p>
+  <div className="flex gap-4">
+    <a
+      href="/quickstart"
+      className="px-6 py-3 rounded-md font-semibold"
+      style={{ backgroundColor: "#94cb04", color: "#1a1a1a" }}
+    >
+      Get Started
+    </a>
+    <a
+      href="https://github.com/npow/metaflow-dagster"
+      className="px-6 py-3 rounded-md font-semibold border-2"
+      style={{ borderColor: "#545454", color: "#1a1a1a" }}
+    >
+      View on GitHub
+    </a>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+## Why Metaflow Dagster?
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+`metaflow-dagster` generates a self-contained Dagster definitions file from any Metaflow flow, letting you schedule, monitor, and launch your pipelines through Dagster while keeping all your existing Metaflow code unchanged.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Keep Your Code" icon="code">
+    No modifications to your existing Metaflow flows required
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Full Observability" icon="chart-line">
+    View runs, logs, and artifacts in the Dagster UI
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="All Graph Shapes" icon="diagram-project">
+    Linear, branching, foreach, and conditional flows all supported
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Event-Driven" icon="bolt">
+    Built-in sensors and scheduling capabilities
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Quick Example
 
-Everything you need to create world-class documentation.
+```bash
+# Generate Dagster definitions from your Metaflow flow
+python my_flow.py dagster create dagster_defs.py
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+# Launch the Dagster UI
+dagster dev -f dagster_defs.py
+```
 
-## Need inspiration?
+Your Metaflow flow is now running in Dagster with full visibility into execution, timing, and artifacts.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Parameter Forwarding" icon="sliders" href="/guides/parameters">
+    Metaflow Parameters automatically become Dagster Config
+  </Card>
+  <Card title="Retry & Timeout" icon="arrows-rotate" href="/guides/retries-and-timeouts">
+    Built-in retry policies and timeout handling
+  </Card>
+  <Card title="Resume Failed Runs" icon="play" href="/guides/resume-failed-runs">
+    Skip completed steps and resume from failures
+  </Card>
+  <Card title="Resource Hints" icon="server" href="/guides/decorators">
+    Forward CPU, memory, and GPU hints to compute backends
+  </Card>
+  <Card title="Scheduling" icon="clock" href="/guides/scheduling">
+    Automatic schedule definitions from @schedule decorator
+  </Card>
+  <Card title="Sensors" icon="radar" href="/guides/triggers-and-sensors">
+    Event-driven triggers with @trigger decorators
+  </Card>
+</CardGroup>
+
+## Get Started
+
+<CardGroup cols={3}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install via pip or from source
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Your first Dagster job in 5 minutes
+  </Card>
+  <Card title="Examples" icon="book" href="/examples/linear-flow">
+    Real-world flow patterns
+  </Card>
+</CardGroup>

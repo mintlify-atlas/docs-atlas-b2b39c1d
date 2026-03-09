@@ -1,0 +1,187 @@
+---
+title: Installation
+description: Install metaflow-dagster and set up your environment
+---
+
+## Requirements
+
+- **Python**: 3.11 or higher
+- **Dependencies**:
+  - `metaflow>=2.10`
+  - `dagster>=1.7` (for running jobs)
+
+## Install from PyPI
+
+The simplest way to install `metaflow-dagster` is from PyPI:
+
+<CodeGroup>
+```bash Basic Installation
+pip install metaflow-dagster
+```
+
+```bash With Test Dependencies
+pip install metaflow-dagster dagster dagster-webserver
+```
+</CodeGroup>
+
+<Info>
+The base package only includes `metaflow` as a dependency. You'll need to install `dagster` separately to run jobs. The `dagster-webserver` package is optional but recommended for local development.
+</Info>
+
+## Install from Source
+
+For development or to use the latest features, install directly from the GitHub repository:
+
+```bash
+git clone https://github.com/npow/metaflow-dagster.git
+cd metaflow-dagster
+pip install -e ".[test]"
+```
+
+The `test` extra includes:
+- `dagster>=1.7`
+- `dagster-webserver`
+- `pytest>=7`
+- `pytest-timeout`
+- `pytest-cov`
+
+## Verify Installation
+
+Check that `metaflow-dagster` is installed correctly:
+
+<Steps>
+  <Step title="Check Metaflow Extension">
+    Create a simple Metaflow flow and verify the `dagster` command is available:
+
+    ```python my_flow.py
+    from metaflow import FlowSpec, step
+
+    class MyFlow(FlowSpec):
+        @step
+        def start(self):
+            print("Hello from Metaflow!")
+            self.next(self.end)
+
+        @step
+        def end(self):
+            print("Flow complete!")
+
+    if __name__ == "__main__":
+        MyFlow()
+    ```
+
+    Run the help command:
+
+    ```bash
+    python my_flow.py dagster --help
+    ```
+
+    You should see output showing the available Dagster commands:
+
+    ```
+    Commands related to Dagster deployment.
+
+    Commands:
+      create   Compile this flow to a Dagster definitions file.
+      resume   Resume a failed Dagster job run, reusing outputs...
+      trigger  Trigger a Dagster job execution.
+    ```
+  </Step>
+
+  <Step title="Generate a Dagster Definitions File">
+    Compile your flow to a Dagster definitions file:
+
+    ```bash
+    python my_flow.py dagster create my_flow_dagster.py
+    ```
+
+    You should see output like:
+
+    ```
+    Compiling MyFlow to Dagster job MyFlow...
+    Dagster job MyFlow for flow MyFlow written to my_flow_dagster.py.
+    Load it in Dagster with:
+        dagster dev -f my_flow_dagster.py
+    ```
+  </Step>
+
+  <Step title="Launch Dagster Dev Server (Optional)">
+    If you installed `dagster-webserver`, you can launch the Dagster UI:
+
+    ```bash
+    dagster dev -f my_flow_dagster.py
+    ```
+
+    Open your browser to `http://localhost:3000` to see your flow in the Dagster UI.
+  </Step>
+</Steps>
+
+<Tip>
+For production deployments, you'll want to configure Dagster's metadata service and datastore. See the [Configuration](/configuration) section for details.
+</Tip>
+
+## Environment Setup
+
+### Metadata Service & Datastore
+
+By default, `metaflow-dagster` uses whatever metadata and datastore backends are active in your Metaflow environment. The generated file bakes in those settings at creation time so every step subprocess uses the same backend.
+
+To use a remote metadata service or object store, configure them before running `dagster create`:
+
+```bash
+python my_flow.py \
+  --metadata=service \
+  --datastore=s3 \
+  dagster create my_flow_dagster.py
+```
+
+Or via environment variables:
+
+```bash
+export METAFLOW_DEFAULT_METADATA=service
+export METAFLOW_DEFAULT_DATASTORE=s3
+python my_flow.py dagster create my_flow_dagster.py
+```
+
+### Dagster Home
+
+For local testing, Dagster will automatically create a temporary SQLite-backed instance. For production, you'll want to configure a persistent `DAGSTER_HOME`:
+
+```bash
+export DAGSTER_HOME=/path/to/dagster/home
+mkdir -p $DAGSTER_HOME
+```
+
+## Troubleshooting
+
+<Warning>
+**Python Version Mismatch**: If you see errors about unsupported Python features, ensure you're running Python 3.11 or higher:
+
+```bash
+python --version
+```
+</Warning>
+
+<Warning>
+**Dagster Not Found**: If `dagster dev` fails with a "command not found" error, make sure you've installed `dagster` and `dagster-webserver`:
+
+```bash
+pip install dagster dagster-webserver
+```
+</Warning>
+
+<Warning>
+**Extension Not Loaded**: If the `dagster` command is not available on your flow, make sure `metaflow-dagster` is installed in the same Python environment as `metaflow`:
+
+```bash
+pip list | grep metaflow
+```
+
+You should see both `metaflow` and `metaflow-dagster` in the output.
+</Warning>
+
+## Next Steps
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Learn how to create and deploy your first flow to Dagster
+</Card>

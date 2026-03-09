@@ -1,0 +1,279 @@
+---
+title: Resume Failed Runs
+description: Recover from failures by reusing completed step outputs and re-running only failed steps
+---
+
+When a Dagster job run fails, metaflow-dagster can resume from the point of failure, skipping steps that already completed successfully. This saves time and compute resources by reusing existing outputs.
+
+## How it works
+
+The `dagster resume` command:
+
+1. Identifies the failed Metaflow run by its run ID
+2. Compiles a new Dagster definitions file with `ORIGIN_RUN_ID` set
+3. Passes `--clone-run-id` to each step subprocess
+4. Metaflow reuses completed task outputs and re-executes only failed/pending steps
+5. Creates a new run ID for the resumed execution
+
+## Basic resume workflow
+
+<Steps>
+  <Step title="Identify the failed run">
+    When a Dagster job fails, note the Metaflow run ID from the logs. It follows the pattern `dagster-<hash>`:
+    
+    ```
+    Run ID: dagster-abc123def456
+    ```
+  </Step>
+
+  <Step title="Resume the run">
+    Execute the resume command:
+    
+    ```bash
+    python my_flow.py dagster resume --run-id dagster-abc123def456
+    ```
+    
+    This creates a temporary definitions file, executes the resumed run, and cleans up automatically.
+  </Step>
+
+  <Step title="Monitor the resumed run">
+    The command output shows:
+    
+    ```
+    Resuming MyFlow from run dagster-abc123def456 as job MyFlow...
+    Resumed Dagster job MyFlow (origin run: dagster-abc123def456, new run: dagster-xyz789ghi012).
+    ```
+  </Step>
+</Steps>
+
+## Command syntax
+
+### Required flag
+
+```bash
+python my_flow.py dagster resume --run-id <dagster-run-id>
+```
+
+- `--run-id`: Metaflow run ID of the failed run (e.g., `dagster-abc123def456`)
+
+### Optional flags
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-abc123def456 \
+  --definitions-file my_flow_resume.py \
+  --job-name CustomJobName \
+  --tag env:staging \
+  --workflow-timeout 7200
+```
+
+| Flag | Description | Default |
+|------|-------------|----------|
+| `--definitions-file` | Path to write resume definitions file | `<FlowName>_dagster.py` |
+| `--job-name` | Dagster job name | Flow name (or project_FlowName) |
+| `--tag` | Tag for the new Metaflow run (repeatable) | None |
+| `--with` | Inject step decorator at resume time (repeatable) | None |
+| `--workflow-timeout` | Maximum wall-clock seconds for the job | None |
+| `--namespace` | Metaflow namespace for the resumed run | Current namespace |
+
+## Saving the resume definitions file
+
+By default, `dagster resume` creates a temporary file and deletes it after execution. To inspect or reuse the resume definitions file:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-abc123def456 \
+  --definitions-file my_flow_resume.py
+```
+
+The generated file includes:
+
+```python
+# Near the top of the file
+ORIGIN_RUN_ID: Optional[str] = 'dagster-abc123def456'
+```
+
+This tells every step subprocess to use `--clone-run-id` when executing.
+
+## Understanding --clone-run-id
+
+The `--clone-run-id` flag is Metaflow's built-in mechanism for resuming runs:
+
+- When a step subprocess runs with `--clone-run-id <origin-run-id>`, Metaflow:
+  - Checks if the task already completed successfully in the origin run
+  - If yes: reuses the existing task outputs (no re-execution)
+  - If no: runs the task normally
+
+The resumed run shares the same pathspec structure as the origin run, so all artifact references remain valid.
+
+<Info>
+Completed steps are **never re-executed** during resume. Only failed or pending steps run again.
+</Info>
+
+## Step-by-step example
+
+Consider a flow with three steps: `start`, `process`, `end`.
+
+### Initial run fails
+
+```python
+class DataPipeline(FlowSpec):
+    @step
+    def start(self):
+        self.data = "initial data"
+        self.next(self.process)
+    
+    @step
+    def process(self):
+        # This step fails
+        raise RuntimeError("Processing failed!")
+    
+    @step
+    def end(self):
+        print("Done")
+```
+
+**Run output:**
+
+```
+Run ID: dagster-abc123
+Step 'start': SUCCESS
+Step 'process': FAILED
+Step 'end': NOT RUN
+```
+
+### Fix the code
+
+Edit `process` to handle the error:
+
+```python
+@step
+def process(self):
+    # Fixed implementation
+    self.processed = self.data.upper()
+    self.next(self.end)
+```
+
+### Resume the run
+
+```bash
+python data_pipeline.py dagster resume --run-id dagster-abc123
+```
+
+**Resume output:**
+
+```
+Run ID: dagster-xyz789
+Step 'start': SKIPPED (reusing from dagster-abc123)
+Step 'process': RUNNING
+Step 'process': SUCCESS
+Step 'end': RUNNING
+Step 'end': SUCCESS
+```
+
+The `start` step's outputs from the original run (`dagster-abc123`) are reused automatically.
+
+## Resume with modified configuration
+
+You can change tags, timeouts, and decorators during resume:
+
+```bash
+python my_flow.py dagster resume \
+  --run-id dagster-abc123 \
+  --tag retry:1 \
+  --workflow-timeout 3600 \
+  --with=sandbox
+```
+
+These modifications apply only to the resumed run, not the origin run.
+
+## Resume in production
+
+For production deployments where runs are triggered via the Dagster UI or API:
+
+<Steps>
+  <Step title="Note the failed run ID">
+    Find the Metaflow run ID in the failed job's logs.
+  </Step>
+
+  <Step title="Generate resume definitions file">
+    On the Dagster server or a machine with access to the flow file:
+    
+    ```bash
+    python my_flow.py dagster resume \
+      --run-id <failed-run-id> \
+      --definitions-file my_flow_resume.py
+    ```
+  </Step>
+
+  <Step title="Deploy the resume file">
+    Replace the active definitions file with the resume file:
+    
+    ```bash
+    cp my_flow_resume.py /path/to/dagster/workspace/
+    ```
+  </Step>
+
+  <Step title="Trigger the resume job">
+    In the Dagster UI:
+    - Navigate to the job
+    - Click **Launch Run**
+    
+    Or via CLI:
+    ```bash
+    dagster job execute -f my_flow_resume.py -j MyFlow
+    ```
+  </Step>
+
+  <Step title="Restore the original definitions">
+    After the resumed run completes, restore the original definitions file:
+    
+    ```bash
+    cp my_flow_dagster.py /path/to/dagster/workspace/
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Do not delete or modify the origin run's datastore files before resuming. The resume mechanism requires access to the original task outputs.
+</Warning>
+
+## Limitations
+
+### Cannot resume from arbitrary steps
+
+Resume always starts from the first failed step in topological order. You cannot manually select which steps to re-run.
+
+### Requires original datastore access
+
+The resumed run must have read access to the origin run's datastore. If using a remote datastore (S3, Azure, etc.), ensure credentials are still valid.
+
+### Parameter changes not supported
+
+You cannot change flow parameter values during resume. The resumed run inherits parameters from the origin run's `_parameters` task.
+
+## Checking run status
+
+To verify which steps completed in the origin run:
+
+```python
+from metaflow import Flow
+
+run = Flow('MyFlow')['dagster-abc123']
+for step in run:
+    for task in step:
+        print(f"{step.id}/{task.id}: {task.finished}")
+```
+
+Completed tasks show `finished=True` and have retrievable artifacts.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Learn how to configure metadata service, datastore, and runtime settings
+  </Card>
+  <Card title="Retries and Timeouts" icon="clock-rotate-left" href="/guides/retries-and-timeouts">
+    Configure automatic retries and timeouts for individual steps
+  </Card>
+</CardGroup>

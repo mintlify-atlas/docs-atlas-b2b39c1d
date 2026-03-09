@@ -1,0 +1,182 @@
+---
+title: "dagster trigger"
+description: "Launch a new Dagster job execution from the command line"
+---
+
+## Overview
+
+The `dagster trigger` command launches a new execution of a Dagster job compiled from your Metaflow flow. This command provides a programmatic way to start runs without using the Dagster UI.
+
+## Command Syntax
+
+```bash
+python my_flow.py dagster trigger [OPTIONS]
+```
+
+## Options
+
+<ParamField path="--definitions-file" type="string" optional>
+  Path to the generated Dagster definitions file. Defaults to `<flowname>_dagster.py` (lowercased).
+</ParamField>
+
+<ParamField path="--job-name" type="string" optional>
+  Dagster job name to execute. Defaults to the flow name. Must match the job name used during `dagster create`.
+</ParamField>
+
+<ParamField path="--run-param" type="string" optional>
+  Flow parameter as `key=value`. Can be specified multiple times to pass multiple parameters. Parameters are passed as op-level config to the start op.
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+Trigger a job with default parameters:
+
+```bash
+python my_flow.py dagster trigger
+# Uses: myflow_dagster.py, job name: MyFlow
+```
+
+### Specify Definitions File
+
+Trigger a job from a custom definitions file:
+
+```bash
+python my_flow.py dagster trigger --definitions-file dagster_defs.py
+```
+
+### Pass Flow Parameters
+
+Provide parameter values for parametrized flows:
+
+<CodeGroup>
+```bash Single Parameter
+python param_flow.py dagster trigger --run-param greeting=Hello
+```
+
+```bash Multiple Parameters
+python param_flow.py dagster trigger \
+  --run-param greeting=Hi \
+  --run-param count=5
+```
+</CodeGroup>
+
+### Custom Job Name
+
+Trigger a job with a custom name:
+
+```bash
+python my_flow.py dagster trigger \
+  --definitions-file production_dagster.py \
+  --job-name production_pipeline
+```
+
+### Complete Example
+
+Trigger a parametrized flow with all options:
+
+```bash
+python train_flow.py dagster trigger \
+  --definitions-file train_flow_prod.py \
+  --job-name production_training \
+  --run-param learning_rate=0.001 \
+  --run-param epochs=100 \
+  --run-param batch_size=32
+```
+
+## Passing Parameters
+
+For flows with `metaflow.Parameter` definitions, use `--run-param` to provide values:
+
+```python
+# Flow definition
+from metaflow import FlowSpec, Parameter, step
+
+class ParamFlow(FlowSpec):
+    greeting = Parameter("greeting", default="Hello")
+    count = Parameter("count", default=3, type=int)
+    
+    @step
+    def start(self):
+        print(f"{self.greeting} x{self.count}")
+        self.next(self.end)
+    
+    @step
+    def end(self):
+        pass
+```
+
+```bash
+# Trigger with parameters
+python param_flow.py dagster trigger \
+  --run-param greeting=Hi \
+  --run-param count=5
+```
+
+## Output
+
+On successful execution, the command displays:
+
+```
+Dagster job MyFlow executed from myflow_dagster.py.
+```
+
+If the job fails, you'll see:
+
+```
+MetaflowException: Dagster job 'MyFlow' failed. <error details>
+```
+
+## Run Configuration
+
+Parameters are passed to Dagster as op-level config:
+
+```yaml
+# Equivalent to:
+ops:
+  op_start:
+    config:
+      greeting: Hi
+      count: 5
+```
+
+This configuration is automatically constructed from your `--run-param` arguments and passed to the start op.
+
+## Dagster Home Directory
+
+The command automatically manages the `DAGSTER_HOME` environment variable:
+
+- If `DAGSTER_HOME` is already set and exists, it uses that configuration
+- Otherwise, creates a temporary directory with:
+  - SQLite storage (single-process, no daemon required)
+  - `SyncInMemoryRunLauncher` (executes runs synchronously)
+  - `DefaultRunCoordinator` (no queue daemon required)
+
+## Metaflow Run ID
+
+The Metaflow run ID is derived deterministically from the Dagster run UUID:
+
+```python
+run_id = "dagster-" + hashlib.sha1(dagster_run_id.encode()).hexdigest()[:12]
+# Example: dagster-d75a08c398a3
+```
+
+This ensures consistent run identification across Dagster and Metaflow.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Definitions" icon="file-code" href="/api/cli/create">
+    Compile a flow to a Dagster definitions file
+  </Card>
+  <Card title="Resume Failed Runs" icon="rotate-right" href="/api/cli/resume">
+    Resume a failed run and skip completed steps
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Dagster Run Execution](https://docs.dagster.io/concepts/ops-jobs-graphs/job-execution)
+- [Metaflow Parameters](https://docs.metaflow.org/metaflow/basics#how-to-define-parameters-for-flows)
+- [Dagster Configuration](https://docs.dagster.io/concepts/configuration/config-schema)

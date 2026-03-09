@@ -1,80 +1,289 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Create and deploy your first Metaflow flow to Dagster in minutes
 ---
 
-## Get started in three steps
+This guide will walk you through creating a simple Metaflow flow and deploying it to Dagster.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Make sure you have `metaflow-dagster` and `dagster` installed:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+pip install metaflow-dagster dagster dagster-webserver
+```
 
-### Step 2: Deploy your changes
+## Step-by-Step Tutorial
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Create a Metaflow Flow">
+    Create a new file called `my_flow.py` with a simple linear flow:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```python my_flow.py
+    from metaflow import FlowSpec, step
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    class MyFlow(FlowSpec):
+        """A simple flow to demonstrate Dagster integration."""
 
-### Step 3: Go live
+        @step
+        def start(self):
+            """Start step: initialize data."""
+            self.message = "Hello from Metaflow!"
+            print(f"Starting flow with message: {self.message}")
+            self.next(self.process)
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+        @step
+        def process(self):
+            """Process step: transform the data."""
+            self.result = self.message.upper()
+            print(f"Processed result: {self.result}")
+            self.next(self.end)
 
-## Next steps
+        @step
+        def end(self):
+            """End step: finalize the flow."""
+            print(f"Flow completed with result: {self.result}")
 
-Now that you have your docs running, explore these key features:
+    if __name__ == "__main__":
+        MyFlow()
+    ```
 
-<CardGroup cols={2}>
+    <Tip>
+    You can test your flow locally first using standard Metaflow commands:
+    ```bash
+    python my_flow.py run
+    ```
+    </Tip>
+  </Step>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Step title="Generate Dagster Definitions">
+    Use the `dagster create` command to compile your flow into a Dagster definitions file:
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    ```bash
+    python my_flow.py dagster create my_flow_dagster.py
+    ```
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    You should see output like:
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+    ```
+    Compiling MyFlow to Dagster job MyFlow...
+    Dagster job MyFlow for flow MyFlow written to my_flow_dagster.py.
+    Load it in Dagster with:
+        dagster dev -f my_flow_dagster.py
+    ```
 
-</CardGroup>
+    This command generates a self-contained Python file (`my_flow_dagster.py`) that contains:
+    - Dagster `@op` definitions for each step
+    - A `@job` that wires the ops together
+    - A `Definitions` object that Dagster can load
+  </Step>
+
+  <Step title="Launch Dagster Dev Server">
+    Start the Dagster development server to view and run your flow:
+
+    ```bash
+    dagster dev -f my_flow_dagster.py
+    ```
+
+    You should see output indicating the server is running:
+
+    ```
+    Serving dagster-webserver on http://127.0.0.1:3000 in process 12345
+    ```
+
+    Open your browser to `http://localhost:3000` to access the Dagster UI.
+  </Step>
+
+  <Step title="View Your Flow in the Dagster UI">
+    In the Dagster UI:
+
+    1. Click on "Jobs" in the left sidebar
+    2. Select your job (`MyFlow`)
+    3. You'll see a visual representation of your flow graph showing the three steps: `start` → `process` → `end`
+    4. Click "Materialize" (or "Launch run") to execute the flow
+
+    <Info>
+    The Dagster UI provides:
+    - **Job Graph**: Visual representation of your flow's DAG
+    - **Launchpad**: Configuration interface for parameters
+    - **Run Timeline**: Gantt chart showing execution timing
+    - **Logs**: Real-time streaming logs from each step
+    - **Metadata**: Artifact keys and retrieval snippets
+    </Info>
+  </Step>
+
+  <Step title="Execute Your Flow">
+    Click the "Materialize" button in the Dagster UI to run your flow. You'll see:
+
+    1. **Real-time progress**: Each step turns green as it completes
+    2. **Execution logs**: Click on any step to see its output
+    3. **Timing information**: See how long each step took
+    4. **Artifact metadata**: Each step shows the Metaflow artifacts it produced
+
+    After the run completes, you can click on individual steps to see:
+    - The exact `metaflow step` CLI command that was executed
+    - Your flow's `print()` output
+    - Artifact keys and a ready-to-copy retrieval snippet
+  </Step>
+</Steps>
+
+## Working with Parameters
+
+Metaflow `Parameter` definitions are automatically converted to Dagster configuration. Here's an example:
+
+```python parametrized_flow.py
+from metaflow import FlowSpec, Parameter, step
+
+class ParametrizedFlow(FlowSpec):
+    """A flow that uses Metaflow Parameters."""
+
+    greeting = Parameter("greeting", default="Hello", help="Greeting prefix")
+    count = Parameter("count", default=3, type=int, help="Number of repetitions")
+
+    @step
+    def start(self):
+        self.messages = [f"{self.greeting} #{i}" for i in range(self.count)]
+        print(f"Generated {len(self.messages)} messages")
+        self.next(self.end)
+
+    @step
+    def end(self):
+        for msg in self.messages:
+            print(msg)
+
+if __name__ == "__main__":
+    ParametrizedFlow()
+```
+
+Compile and run:
+
+```bash
+python parametrized_flow.py dagster create param_flow_dagster.py
+dagster dev -f param_flow_dagster.py
+```
+
+In the Dagster UI's Launchpad, you'll see a configuration form with your parameters. You can override the defaults before launching the run.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+**Important**: All Metaflow parameters must have default values when deploying to Dagster. This ensures the flow can be executed without manual intervention.
 </Note>
+
+## Running from the CLI
+
+You can also execute your Dagster job directly from the command line:
+
+```bash
+# Execute with default parameters
+python -m dagster job execute -f my_flow_dagster.py -j MyFlow
+
+# Execute with custom parameters (requires a config file)
+cat > config.yaml << EOF
+ops:
+  op_start:
+    config:
+      greeting: Hi
+      count: 5
+EOF
+
+python -m dagster job execute -f param_flow_dagster.py -j ParametrizedFlow -c config.yaml
+```
+
+## Accessing Artifacts
+
+After a run completes, you can access Metaflow artifacts from the Dagster UI or programmatically:
+
+### From the Dagster UI
+
+Click on any completed step to see its metadata panel. You'll find:
+- **Artifact keys**: The names of all artifacts created by this step
+- **Retrieval snippet**: Ready-to-copy Python code to load the artifacts
+
+### Programmatically
+
+Use the standard Metaflow client to access artifacts:
+
+```python
+from metaflow import Task
+
+# Replace with your actual run ID (visible in Dagster UI)
+task = Task('MyFlow/dagster-abc123/process/1')
+result = task['result'].data
+print(result)  # "HELLO FROM METAFLOW!"
+```
+
+## Advanced Features
+
+### Step Decorators
+
+Inject Metaflow step decorators at deploy time without modifying your flow source:
+
+```bash
+# Run every step in a sandbox
+python my_flow.py dagster create my_flow_dagster.py --with=sandbox
+
+# Add resource hints
+python my_flow.py dagster create my_flow_dagster.py \
+  --with='resources:cpu=4,memory=8000'
+```
+
+### Workflow Timeout
+
+Set a maximum wall-clock time for the entire job run:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py --workflow-timeout 3600
+```
+
+### Custom Job Name
+
+Override the default job name:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py --name nightly_pipeline
+```
+
+### Tags
+
+Add Metaflow tags that are forwarded to every step subprocess:
+
+```bash
+python my_flow.py dagster create my_flow_dagster.py \
+  --tag env:prod \
+  --tag version:2
+```
+
+## What You Learned
+
+<CardGroup cols={2}>
+  <Card title="Flow Creation" icon="code">
+    How to write a Metaflow flow that works with Dagster
+  </Card>
+  <Card title="Compilation" icon="gears">
+    How to generate Dagster definitions from a Metaflow flow
+  </Card>
+  <Card title="Execution" icon="play">
+    How to run your flow in the Dagster UI and CLI
+  </Card>
+  <Card title="Parameters" icon="sliders">
+    How to use Metaflow Parameters with Dagster configuration
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Now that you've created your first flow, explore more advanced features:
+
+<CardGroup cols={2}>
+  <Card title="Graph Patterns" icon="diagram-project" href="/concepts/graph-shapes">
+    Learn about branching, conditional, and foreach flows
+  </Card>
+  <Card title="Scheduling" icon="calendar" href="/guides/scheduling">
+    Set up automated flow execution with Dagster schedules
+  </Card>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Configure metadata services, datastores, and production settings
+  </Card>
+  <Card title="Examples" icon="book" href="/examples/linear-flow">
+    Explore complete working examples
+  </Card>
+</CardGroup>

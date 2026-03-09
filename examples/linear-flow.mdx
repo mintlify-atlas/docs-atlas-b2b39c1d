@@ -1,0 +1,94 @@
+---
+title: Linear Flow
+description: A simple sequential flow demonstrating the basic start → process → end pattern
+---
+
+The linear flow is the simplest Metaflow pattern: a sequence of steps that execute one after another. This is the foundation for understanding how Metaflow and metaflow-dagster work together.
+
+## Complete Example
+
+Here's the complete `LinearFlow` from the test suite:
+
+```python
+"""Simple linear flow: start → process → end"""
+from metaflow import FlowSpec, step
+
+
+class LinearFlow(FlowSpec):
+    """A simple linear flow for testing the Dagster integration."""
+
+    @step
+    def start(self):
+        self.message = "hello from start"
+        self.next(self.process)
+
+    @step
+    def process(self):
+        self.result = self.message + " -> process"
+        self.next(self.end)
+
+    @step
+    def end(self):
+        assert self.result == "hello from start -> process"
+        print("LinearFlow completed:", self.result)
+
+
+if __name__ == "__main__":
+    LinearFlow()
+```
+
+## How It Works
+
+<Steps>
+  <Step title="Start step initializes data">
+    The `start` step creates a `message` attribute and passes control to the `process` step using `self.next(self.process)`.
+  </Step>
+  
+  <Step title="Process step transforms data">
+    The `process` step accesses `self.message` (inherited from start), appends to it, and stores the result in `self.result`.
+  </Step>
+  
+  <Step title="End step validates and completes">
+    The `end` step verifies the result and prints the final output. Every Metaflow flow must have an `end` step.
+  </Step>
+</Steps>
+
+<Info>
+  **Data Flow**: Each step can access attributes set by previous steps through `self`. Metaflow automatically handles data passing between steps.
+</Info>
+
+## Creating the Dagster Asset
+
+Convert this flow to a Dagster asset using the CLI:
+
+```bash
+dagster create linear_flow.py LinearFlow
+```
+
+This generates a Dagster asset definition that:
+- Exposes the Metaflow flow as a materialized asset
+- Preserves the step execution order
+- Allows the flow to be orchestrated within Dagster pipelines
+
+## Generated Dagster Graph
+
+When materialized in Dagster, the linear flow creates a simple dependency chain:
+
+```
+LinearFlow (asset)
+  └─ Execution: start → process → end
+```
+
+Each step runs sequentially, with Metaflow handling the state management and data persistence between steps.
+
+<Note>
+  Linear flows are ideal for ETL pipelines, simple data transformations, and any workflow where steps must execute in strict order.
+</Note>
+
+## Key Takeaways
+
+- Every Metaflow flow must have a `start` and `end` step
+- Use `self.next()` to define the flow graph
+- Data is shared between steps via `self` attributes
+- The flow executes in the exact order defined by `next()` calls
+- `dagster create` converts the flow into a reusable Dagster asset
