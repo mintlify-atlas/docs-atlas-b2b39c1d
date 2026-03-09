@@ -1,0 +1,96 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Metaflow Dagster",
+  "projectDescription": "Dagster scheduling, observability, and UI for your Metaflow pipelines",
+  "theme": "palm",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/how-it-works",
+              "concepts/graph-shapes",
+              "concepts/compilation"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/parameters",
+              "guides/decorators",
+              "guides/retries-and-timeouts",
+              "guides/environment-variables",
+              "guides/scheduling",
+              "guides/triggers-and-sensors",
+              "guides/resume-failed-runs",
+              "guides/configuration"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/linear-flow",
+              "examples/branching-flow",
+              "examples/foreach-flow",
+              "examples/conditional-flow"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "CLI Commands",
+            "pages": [
+              "api/cli/create",
+              "api/cli/trigger",
+              "api/cli/resume"
+            ]
+          },
+          {
+            "group": "Python API",
+            "pages": [
+              "api/python/deployed-flow",
+              "api/python/triggered-run"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Compile Metaflow flows to Dagster jobs",
+    "Support for all graph shapes (linear, branching, foreach, conditional)",
+    "Automatic parameter forwarding as Dagster Config",
+    "Built-in retry and timeout handling",
+    "Event-driven sensors and scheduling",
+    "Resume failed runs with original run ID",
+    "Resource hints for compute backends",
+    "Step decorator injection at deploy time"
+  ],
+  "publicApiSurface": [
+    "dagster create",
+    "dagster trigger",
+    "dagster resume",
+    "DagsterDeployedFlow",
+    "DagsterTriggeredRun",
+    "DagsterCompiler",
+    "@trigger decorator",
+    "@trigger_on_finish decorator"
+  ]
+}
